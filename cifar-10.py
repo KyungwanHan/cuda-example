@@ -4,6 +4,7 @@ import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
 import time
+import platform
 
 # 컨볼루션 신경망 정의
 class ConvNet(nn.Module):
@@ -25,64 +26,73 @@ class ConvNet(nn.Module):
         x = self.fc3(x)
         return x
 
-# CIFAR-10 데이터셋 로드
-transform = transforms.Compose(
-    [transforms.ToTensor(),
-     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+# CIFAR-10 데이터셋 로드 및 기타 설정 함수
+def load_data():
+    transform = transforms.Compose(
+        [transforms.ToTensor(),
+         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
-trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
-                                        download=True, transform=transform)
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=4,
-                                          shuffle=True, num_workers=2)
+    trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
+                                            download=True, transform=transform)
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=4,
+                                              shuffle=True, num_workers=2)
+    return trainloader
 
+# 학습 함수
+def train(net, trainloader, device):
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 
+    # 학습 시작 시간 측정
+    start_time = time.time()
 
-print(f"CUDA is available(): {torch.cuda.is_available()}")
+    # 학습 과정
+    for epoch in range(2):  # 데모를 위해 2 에포크만 실행
+        for i, data in enumerate(trainloader, 0):
+            inputs, labels = data
 
-# GPU에서 신경망 초기화 (CUDA 사용 가능한 경우)
-net_gpu = ConvNet()
-if torch.cuda.is_available():
-    net_gpu.cuda()
+            # 데이터를 지정된 장치로 이동
+            inputs, labels = inputs.to(device), labels.to(device)
 
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net_gpu.parameters(), lr=0.001, momentum=0.9)
+            optimizer.zero_grad()
+            outputs = net(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
 
-# 학습 시작 시간 측정
-start_time_gpu = time.time()
+    # 학습 종료 시간 측정
+    end_time = time.time()
+    return end_time - start_time
 
-# 학습 과정
-for epoch in range(2):  # 데모를 위해 2 에포크만 실행
-    for i, data in enumerate(trainloader, 0):
-        inputs, labels = data
+def main():
+    trainloader = load_data()
 
+    # CUDA 사용 가능 여부 확인
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif platform.system() == 'Darwin' and torch.backends.mps.is_available():
+        # MacOS에서 Apple Silicon의 Metal 가용성 확인
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
 
-# 학습 종료 시간 측정
-end_time_gpu = time.time()
-print(f"GPU training time: {end_time_gpu - start_time_gpu:.3f} seconds")
+    print(f"Training on {device}")
 
+    # 신경망 초기화 및 장치 할당
+    net = ConvNet().to(device)
 
-# CPU에서 신경망 초기화
-net_cpu = ConvNet()
+    # 학습
+    training_time = train(net, trainloader, device)
+    print(f"Training time on {device}: {training_time:.3f} seconds")
 
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net_cpu.parameters(), lr=0.001, momentum=0.9)
+    # CPU에서 학습과 비교
+    if device is not torch.device("cpu"):
+        device = torch.device("cpu")
+        net = ConvNet().to(device)
 
-# 학습 시작 시간 측정
-start_time_cpu = time.time()
+        # CPU에서 학습
+        training_time = train(net, trainloader, device)  # 'device' 인자 추가
+        print(f"Training time on CPU: {training_time:.3f} seconds")
 
-# 학습 과정
-for epoch in range(2):  # 데모를 위해 2 에포크만 실행
-    for i, data in enumerate(trainloader, 0):
-        inputs, labels = data
-
-        optimizer.zero_grad()
-
-        outputs = net_cpu(inputs)
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
-
-# 학습 종료 시간 측정
-end_time_cpu = time.time()
-print(f"CPU training time: {end_time_cpu - start_time_cpu:.3f} seconds")
-
+if __name__ == '__main__':
+    main()
