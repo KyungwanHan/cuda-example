@@ -67,32 +67,29 @@ def train(net, trainloader, device):
 def main():
     trainloader = load_data()
 
-    # CUDA 사용 가능 여부 확인
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    elif platform.system() == 'Darwin' and torch.backends.mps.is_available():
-        # MacOS에서 Apple Silicon의 Metal 가용성 확인
-        device = torch.device("mps")
-    else:
-        device = torch.device("cpu")
-
-    print(f"Training on {device}")
-
-    # 신경망 초기화 및 장치 할당
+    # 항상 CPU에서 먼저 학습
+    device = torch.device("cpu")
     net = ConvNet().to(device)
 
-    # 학습
+    print("Training on CPU")
     training_time = train(net, trainloader, device)
-    print(f"Training time on {device}: {training_time:.3f} seconds")
+    print(f"Training time on CPU: {training_time:.3f} seconds")
 
-    # CPU에서 학습과 비교
-    if device is not torch.device("cpu"):
-        device = torch.device("cpu")
+    # CUDA 또는 Apple Silicon의 Metal을 사용할 수 있는지 확인
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
         net = ConvNet().to(device)
-
-        # CPU에서 학습
-        training_time = train(net, trainloader, device)  # 'device' 인자 추가
-        print(f"Training time on CPU: {training_time:.3f} seconds")
+        print("Training on CUDA")
+        training_time = train(net, trainloader, device)
+        print(f"Training time on CUDA: {training_time:.3f} seconds")
+    elif platform.system() == 'Darwin' and torch.backends.mps.is_available():
+        device = torch.device("mps")
+        net = ConvNet().to(device)
+        print("Training on Metal")
+        training_time = train(net, trainloader, device)
+        print(f"Training time on Metal: {training_time:.3f} seconds")
+    else:
+        print("No additional hardware acceleration available. Exiting.")
 
 if __name__ == '__main__':
     main()
